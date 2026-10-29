@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="top">
+  <h1>{{ s.app }}</h1>
+  <form method="post" action="/lock"><button class="ghost" type="submit">{{ s.btn_lock }}</button></form>
+</header>
+{% if error %}<p class="err">{{ s[error] if error in s else error }}</p>{% endif %}
+
+<section class="card status" id="status">
+  <div class="state" id="state">…</div>
+  <div class="remaining" id="remaining"></div>
+  <div id="errors" class="err"></div>
+
+  <div id="closed-controls">
+    <p class="muted">{{ s.open_for }}</p>
+    <div class="chips" id="chips">
+      <button class="chip" data-min="30">30 {{ s.minutes }}</button>
+      <button class="chip" data-min="60">1 {{ s.hours }}</button>
+      <button class="chip" data-min="120">2 {{ s.hours }}</button>
+      <button class="chip" data-min="240">4 {{ s.hours }}</button>
+      <button class="chip" data-min="480">8 {{ s.hours }}</button>
+      <button class="chip" id="chip-custom">{{ s.custom }}</button>
+    </div>
+    <div id="custom-row" class="hidden">
+      <input type="number" id="custom-min" min="1" value="{{ settings.default_open_minutes }}"> {{ s.minutes }}
+    </div>
+    <button class="primary big" id="btn-open">{{ s.btn_open }}</button>
+  </div>
+
+  <div id="open-controls" class="hidden">
+    <div class="row">
+      <button class="big danger" id="btn-close">{{ s.btn_close }}</button>
+      <button class="big" id="btn-extend" data-min="60">{{ s.btn_extend }} 1 {{ s.hours }}</button>
+    </div>
+  </div>
+  <p class="muted small">{{ s.about }}</p>
+</section>
+
+<section class="card">
+  <h2>{{ s.protections }}</h2>
+  <div class="prot" data-id="quickconnect">
+    <div class="prot-head">
+      <span class="name">{{ s.quickconnect }}</span>
+      <label class="switch"><input type="checkbox" class="manage" data-id="quickconnect"
+        {{ 'checked' if settings.manage_quickconnect }}><span></span></label>
+    </div>
+    <div class="live muted small" data-live="quickconnect">{{ s.live }}: …</div>
+  </div>
+  <div class="prot" data-id="ssh">
+    <div class="prot-head">
+      <span class="name">{{ s.ssh }}</span>
+      <label class="switch"><input type="checkbox" class="manage" data-id="ssh"
+        {{ 'checked' if settings.manage_ssh }}><span></span></label>
+    </div>
+    <div class="live muted small" data-live="ssh">{{ s.live }}: …</div>
+  </div>
+</section>
+
+<details class="card">
+  <summary><h2>{{ s.settings }}</h2></summary>
+  <form id="settings-form">
+    <h3>{{ s.behaviour }}</h3>
+    <label>{{ s.language }}
+      <select name="language">
+        <option value="en" {{ 'selected' if settings.language=='en' }}>English</option>
+        <option value="he" {{ 'selected' if settings.language=='he' }}>עברית</option>
+      </select></label>
+    <label>{{ s.default_open_minutes }}<input type="number" name="default_open_minutes" min="1" value="{{ settings.default_open_minutes }}"></label>
+    <label>{{ s.reminder_minutes }}<input type="number" name="reminder_minutes" min="0" value="{{ settings.reminder_minutes }}"></label>
+    <label>{{ s.guard_grace_minutes }}<input type="number" name="guard_grace_minutes" min="0" value="{{ settings.guard_grace_minutes }}"></label>
+    <label>{{ s.ui_lock_minutes }}<input type="number" name="ui_lock_minutes" min="1" value="{{ settings.ui_lock_minutes }}"></label>
+    <label>Timezone<input type="text" name="timezone" value="{{ settings.timezone }}" placeholder="Asia/Jerusalem"></label>
+
+    <h3>{{ s.ssh }}</h3>
+    <label>{{ s.ssh_port }}<input type="number" name="ssh_port" min="1" max="65535" value="{{ settings.ssh_port }}"></label>
+    <label>{{ s.ssh_trusted }}<input type="text" name="ssh_trusted_hosts" dir="ltr" value="{{ settings.ssh_trusted_hosts|join(', ') }}" placeholder="192.168.1.50, 10.0.0.0/24"></label>
+
+    <h3>{{ s.dsm }}</h3>
+    <label>{{ s.dsm_url }}<input type="text" name="dsm_url" dir="ltr" value="{{ settings.dsm_url }}"></label>
+    <label>{{ s.dsm_user }}<input type="text" name="dsm_user" dir="ltr" value="{{ settings.dsm_user }}" autocomplete="off"></label>
+    <label>{{ s.dsm_password }}<input type="password" name="dsm_password" dir="ltr" value="" placeholder="{{ settings.dsm_password }}" autocomplete="new-password"></label>
+    <button type="button" class="ghost" id="btn-test-dsm">{{ s.btn_test_dsm }}</button>
+    <pre id="dsm-result" class="small hidden"></pre>
+
+    <h3>{{ s.notifications }}</h3>
+    <label>{{ s.notify_mode }}
+      <select name="notify_mode">
+        <option value="none" {{ 'selected' if settings.notify_mode=='none' }}>{{ s.none }}</option>
+        <option value="ha" {{ 'selected' if settings.notify_mode=='ha' }}>{{ s.ha }}</option>
+        <option value="webhook" {{ 'selected' if settings.notify_mode=='webhook' }}>{{ s.webhook }}</option>
+      </select></label>
+    <label>{{ s.ha_url }}<input type="text" name="ha_url" dir="ltr" value="{{ settings.ha_url }}" placeholder="http://homeassistant.local:8123"></label>
+    <label>{{ s.ha_token }}<input type="password" name="ha_token" dir="ltr" value="" placeholder="{{ settings.ha_token }}" autocomplete="new-password"></label>
+    <label>{{ s.ha_notify_service }}<input type="text" name="ha_notify_service" dir="ltr" value="{{ settings.ha_notify_service }}" placeholder="notify.mobile_app_myphone"></label>
+    <label>{{ s.webhook_url }}<input type="text" name="webhook_url" dir="ltr" value="{{ settings.webhook_url }}"></label>
+    <button type="button" class="ghost" id="btn-test-notify">{{ s.btn_test_notify }}</button>
+    <span id="notify-result" class="small"></span>
+
+    <div class="row">
+      <button class="primary big" type="submit">{{ s.btn_save }}</button>
+      <span id="save-result" class="small"></span>
+    </div>
+  </form>
+
+  <h3>{{ s.ha_integration }}</h3>
+  <p class="muted small">{{ s.ha_integration_hint }}</p>
+  <button type="button" class="ghost" id="btn-token">{{ s.api_token }}</button>
+  <pre id="token" class="small hidden" dir="ltr"></pre>
+
+  <h3>{{ s.change_password }}</h3>
+  <form method="post" action="/password">
+    <label>{{ s.password }}<input type="password" name="current" required></label>
+    <label>{{ s.new_password }}<input type="password" name="new" minlength="8" required></label>
+    <button class="ghost" type="submit">{{ s.btn_save }}</button>
+  </form>
+</details>
+
+<details class="card">
+  <summary><h2>{{ s.log }}</h2></summary>
+  <ul id="log" class="log"></ul>
+</details>
+{% endblock %}
+
+{% block script %}
+<script>
+const S = {{ s|tojson }};
+const TZ = {{ settings.timezone|tojson }};
+const $ = (q) => document.querySelector(q);
+let status = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {method: opts.method || 'POST', headers: {'Content-Type': 'application/json'},
+                               body: opts.body ? JSON.stringify(opts.body) : undefined});
+  if (r.status === 401 || r.status === 403) { location.reload(); return null; }
+  return r.json();
+}
+function fmtTime(ts) {
+  try { return new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', timeZone: TZ}); }
+  catch (e) { return new Date(ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}); }
+}
+function fmtDur(sec) {
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60);
+  return h ? `${h} ${S.hours} ${m % 60} ${S.minutes}` : `${m} ${S.minutes}`;
+}
+function render(st) {
+  status = st;
+  $('#state').textContent = st.is_open ? S.status_open : S.status_closed;
+  $('#status').classList.toggle('is-open', st.is_open);
+  $('#closed-controls').classList.toggle('hidden', st.is_open);
+  $('#open-controls').classList.toggle('hidden', !st.is_open);
+  $('#remaining').textContent = st.is_open ? `${S.remaining} ${fmtDur(st.remaining_seconds)} (${fmtTime(st.expires_at)})` : '';
+  $('#errors').textContent = (st.errors || []).join('; ');
+  for (const [cid, p] of Object.entries(st.protections)) {
+    const el = document.querySelector(`[data-live="${cid}"]`);
+    if (el && p.live) {
+      const word = p.live === 'open' ? S.status_open : p.live === 'closed' ? S.status_closed : p.live;
+      el.textContent = `${S.live}: ${word}${p.detail ? ' · ' + p.detail : ''}` + (p.managed ? '' : ` · ${S.unmanaged}`);
+    }
+  }
+  $('#log').innerHTML = (st.log || []).slice().reverse().map(e =>
+    `<li><span class="muted">${fmtTime(e.t)}</span> ${e.event} ${e.detail || ''}</li>`).join('');
+}
+async function refresh(live) {
+  const st = await api(`/api/status?live=${live ? 'true' : 'false'}`, {method: 'GET'});
+  if (st) render(st);
+}
+let chosen = {{ settings.default_open_minutes }};
+document.querySelectorAll('#chips .chip[data-min]').forEach(b => b.onclick = () => {
+  chosen = +b.dataset.min; $('#custom-row').classList.add('hidden');
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
+});
+$('#chip-custom').onclick = () => { $('#custom-row').classList.remove('hidden');
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.id === 'chip-custom')); };
+$('#btn-open').onclick = async () => {
+  const min = $('#custom-row').classList.contains('hidden') ? chosen : +$('#custom-min').value;
+  $('#btn-open').disabled = true;
+  const st = await api(`/api/open?minutes=${min}`); if (st) render(st);
+  $('#btn-open').disabled = false; refresh(true);
+};
+$('#btn-close').onclick = async () => { const st = await api('/api/close'); if (st) render(st); refresh(true); };
+$('#btn-extend').onclick = async () => { const st = await api(`/api/extend?minutes=${$('#btn-extend').dataset.min}`); if (st) render(st); };
+document.querySelectorAll('input.manage').forEach(cb => cb.onchange = async () => {
+  const st = await api(`/api/protections/${cb.dataset.id}?managed=${cb.checked}`); if (st) render(st); refresh(true);
+});
+$('#settings-form').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const data = Object.fromEntries(new FormData(ev.target).entries());
+  const r = await api('/api/settings', {body: data});
+  $('#save-result').textContent = r && r.ok ? S.saved + (r.errors.length ? ' · ' + r.errors.join('; ') : '') : 'error';
+  if (r && r.ok && data.language !== '{{ lang }}') location.reload();
+  refresh(true);
+};
+$('#btn-test-dsm').onclick = async () => {
+  const data = Object.fromEntries(new FormData($('#settings-form')).entries());
+  await api('/api/settings', {body: {dsm_url: data.dsm_url, dsm_user: data.dsm_user, dsm_password: data.dsm_password}});
+  const r = await api('/api/test/dsm'); $('#dsm-result').classList.remove('hidden');
+  $('#dsm-result').textContent = JSON.stringify(r, null, 1);
+};
+$('#btn-test-notify').onclick = async () => { const r = await api('/api/test/notify'); $('#notify-result').textContent = r && r.ok ? '✓' : '✗'; };
+$('#btn-token').onclick = async () => { const r = await api('/api/token', {method: 'GET'}); $('#token').classList.remove('hidden'); $('#token').textContent = r.api_token; };
+document.querySelector(`.chip[data-min="${chosen}"]`)?.classList.add('on');
+refresh(true);
+setInterval(() => refresh(false), 15000);
+setInterval(() => { if (status && status.is_open) { status.remaining_seconds = Math.max(0, status.remaining_seconds - 1); render(status); } }, 1000);
+</script>
+{% endblock %}

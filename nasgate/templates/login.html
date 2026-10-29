@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ s.app }}</h1>
+<section class="card">
+  <h2>{{ s.login_title }}</h2>
+  {% if error %}<p class="err">{{ s[error] if error in s else error }}</p>{% endif %}
+  <form method="post" action="/login">
+    <label>{{ s.password }}<input type="password" name="password" required autofocus></label>
+    <button class="primary big" type="submit">{{ s.login }}</button>
+  </form>
+</section>
+{% endblock %}

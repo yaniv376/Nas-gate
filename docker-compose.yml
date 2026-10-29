@@ -1,0 +1,23 @@
+services:
+  nas-gate:
+    image: ghcr.io/yaniv376/nas-gate:latest
+    container_name: nas-gate
+    restart: unless-stopped
+    # Host network: the gate reaches DSM on 127.0.0.1 and manages the host's
+    # SSH port with iptables. The web page is then on http://<nas-ip>:8787
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - /volume1/docker/nas-gate:/data
+    environment:
+      NASGATE_PORT: "8787"
+      NASGATE_TIMEZONE: "Asia/Jerusalem"
+      NASGATE_LANGUAGE: "en"        # en or he, changeable in the page
+      # Optional first-run values (all editable later in the settings page):
+      # NASGATE_DSM_URL: "https://127.0.0.1:5001"
+      # NASGATE_DSM_USER: "nasgate"
+      # NASGATE_DSM_PASSWORD: "change-me"
+      # NASGATE_HA_URL: "http://homeassistant.local:8123"
+      # NASGATE_HA_TOKEN: "long-lived-token"
+      # NASGATE_HA_NOTIFY_SERVICE: "notify.mobile_app_myphone"

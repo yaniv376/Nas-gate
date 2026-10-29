@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import logging
 import time
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -21,7 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, notify
+from . import config, notify, scan
 from .dsm import DSMClient, DSMError
 from .engine import GateEngine
 from .i18n import all_strings, t
@@ -154,6 +155,8 @@ def create_app(engine: GateEngine) -> FastAPI:
             "log": st.log[-15:],
             "now": time.time(),
         }
+        last = scan.load()
+        out["scan"] = last.summary() if last else None
         if live:
             for cid, cs in engine.live_status().items():
                 out["protections"][cid].update({"live": cs.live, "detail": cs.detail})
@@ -215,6 +218,32 @@ def create_app(engine: GateEngine) -> FastAPI:
     def api_test_notify(request: Request, _=Depends(require_auth)):
         ok = notify.send(settings, t(settings.language, "app"), t(settings.language, "n_test"), "test")
         return _with_session(JSONResponse({"ok": ok}), request)
+
+    # -- security scan ----------------------------------------------------------
+    @app.post("/api/scan")
+    def api_scan(request: Request, _=Depends(require_auth)):
+        result = scan.run_scan(settings, engine.state.is_open)
+        engine.state.add_log("scan", f"score {result.score}")
+        return _with_session(JSONResponse(asdict(result)), request)
+
+    @app.get("/api/scan")
+    def api_scan_last(request: Request, _=Depends(require_auth)):
+        last = scan.load()
+        return JSONResponse(asdict(last) if last else {"findings": [], "score": None})
+
+    @app.post("/api/scan/fix/{fix_id}")
+    def api_scan_fix(request: Request, fix_id: str, _=Depends(require_auth)):
+        if fix_id == "close_gate":
+            errors = engine.close("manual")
+            return _with_session(JSONResponse({"ok": not errors, "fix": fix_id, "errors": errors}), request)
+        try:
+            out = scan.apply_fix(settings, fix_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="unknown fix")
+        except DSMError as e:
+            return _with_session(JSONResponse({"ok": False, "fix": fix_id, "error": str(e)}), request)
+        engine.state.add_log("fix", fix_id)
+        return _with_session(JSONResponse(out), request)
 
     @app.get("/api/token")
     def api_token(request: Request, _=Depends(require_auth)):

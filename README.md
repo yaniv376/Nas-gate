@@ -94,6 +94,18 @@ in Home Assistant, then install the package and scripts from
 A dashboard card example follows the same pattern as the Home Assistant
 agent gate: status, four duration buttons, extend, close.
 
+## Security scan
+
+The *Scan now* button on the page checks the NAS and lists findings with a
+severity, a plain-language explanation and, where it cannot lock you out, a
+*Fix* button (telnet off, auto block on, HTTPS redirect, HSTS, SMB minimum
+SMB2). Checks: DSM updates, Telnet/SSH, auto block, DSM firewall, HTTPS
+redirect and HSTS, SMB1, the default `admin` and `guest` accounts, 2 step
+verification enforcement, QuickConnect versus the gate state, DSM Security
+Advisor results, and every service listening on all network interfaces. The
+score and counts are also exposed in `/api/status` (`scan`) for Home
+Assistant.
+
 ## Updating
 
 Pull the new image in Container Manager and rebuild the project. Settings
@@ -102,8 +114,8 @@ and state live in `/data` and are kept.
 ## Roadmap
 
 1. ✅ Gate core, QuickConnect, SSH, page, notifications
-2. Home Assistant dashboard card and optional one tap link from the HA gate
-3. Security scan with a report and one click suggestions
+2. ✅ Home Assistant integration (package, scripts, notification buttons)
+3. ✅ Security scan with a report and one click fixes
 4. Sharing polish, documentation, example configs
 5. Optional native Synology package
 

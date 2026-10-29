@@ -57,3 +57,16 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); paddi
 [dir=rtl] .switch input:checked + span::before { transform: translateX(-24px); }
 .log { list-style: none; padding: 0; margin: 8px 0 0; font-size: 14px; }
 .log li { padding: 4px 0; border-top: 1px solid var(--line); }
+
+.scan-head { display: flex; align-items: baseline; gap: 12px; margin: 6px 0 10px; }
+.score { font-size: 34px; font-weight: 800; color: var(--muted); }
+.score.good { color: var(--ok); } .score.warn { color: var(--warn); } .score.bad { color: var(--danger); }
+.findings { list-style: none; padding: 0; margin: 0; }
+.findings li { padding: 8px 0; border-top: 1px solid var(--line); }
+.findings .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-inline-end: 6px; background: var(--line); }
+.sev-critical .badge, .sev-high .badge { background: var(--danger); color: #fff; }
+.sev-medium .badge { background: var(--warn); color: #fff; }
+.sev-low .badge { background: var(--accent); color: #fff; }
+.sev-ok .badge { background: var(--ok); color: #fff; }
+.findings .advice { margin-top: 4px; }
+.findings .fix { margin-top: 6px; }

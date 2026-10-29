@@ -56,6 +56,16 @@
   </div>
 </section>
 
+<section class="card" id="scan">
+  <div class="top"><h2>{{ s.scan }}</h2>
+    <button class="ghost" id="btn-scan">{{ s.btn_scan }}</button></div>
+  <div class="scan-head">
+    <span class="score" id="scan-score">–</span>
+    <span class="muted small" id="scan-meta">{{ s.never_scanned }}</span>
+  </div>
+  <ul id="findings" class="findings"></ul>
+</section>
+
 <details class="card">
   <summary><h2>{{ s.settings }}</h2></summary>
   <form id="settings-form">
@@ -199,6 +209,34 @@ $('#btn-test-dsm').onclick = async () => {
 $('#btn-test-notify').onclick = async () => { const r = await api('/api/test/notify'); $('#notify-result').textContent = r && r.ok ? '✓' : '✗'; };
 $('#btn-token').onclick = async () => { const r = await api('/api/token', {method: 'GET'}); $('#token').classList.remove('hidden'); $('#token').textContent = r.api_token + '\n' + 'fingerprint: ' + r.fingerprint; };
 document.querySelector(`.chip[data-min="${chosen}"]`)?.classList.add('on');
+
+function renderScan(sc) {
+  if (!sc || sc.score === null || sc.score === undefined) { return; }
+  const el = $('#scan-score'); el.textContent = sc.score;
+  el.className = 'score ' + (sc.score >= 80 ? 'good' : sc.score >= 50 ? 'warn' : 'bad');
+  $('#scan-meta').textContent = `${S.last_scan}: ${fmtTime(sc.finished_at)}`;
+  $('#findings').innerHTML = (sc.findings || []).map(f => `
+    <li class="sev-${f.severity}">
+      <span class="badge">${S['sev_' + f.severity] || f.severity}</span>
+      <span class="ftitle">${S[f.title_key] || f.title_key}${f.detail ? ' · <span dir="ltr">' + f.detail + '</span>' : ''}</span>
+      ${f.advice_key ? `<div class="advice small muted">${S[f.advice_key] || ''}</div>` : ''}
+      ${f.fix ? `<button class="chip fix" data-fix="${f.fix}">${S.btn_fix}</button>` : ''}
+    </li>`).join('');
+  document.querySelectorAll('button.fix').forEach(b => b.onclick = async () => {
+    if (!confirm(S.fix_confirm)) return;
+    b.disabled = true;
+    const r = await api('/api/scan/fix/' + b.dataset.fix);
+    b.textContent = r && r.ok ? S.fixed : (r && (r.error || (r.errors || []).join('; '))) || 'error';
+    if (r && r.ok) setTimeout(runScan, 1500);
+  });
+}
+async function runScan() {
+  $('#btn-scan').disabled = true; $('#btn-scan').textContent = S.scanning;
+  const sc = await api('/api/scan'); if (sc) renderScan(sc);
+  $('#btn-scan').disabled = false; $('#btn-scan').textContent = S.btn_scan;
+}
+$('#btn-scan').onclick = runScan;
+api('/api/scan', {method: 'GET'}).then(sc => renderScan(sc));
 refresh(true);
 setInterval(() => refresh(false), 15000);
 setInterval(() => { if (status && status.is_open) { status.remaining_seconds = Math.max(0, status.remaining_seconds - 1); render(status); } }, 1000);

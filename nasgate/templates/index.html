@@ -59,11 +59,23 @@
 <section class="card" id="scan">
   <div class="top"><h2>{{ s.scan }}</h2>
     <button class="ghost" id="btn-scan">{{ s.btn_scan }}</button></div>
+  <div class="row small" id="scan-tools">
+    <button class="chip" id="btn-copy">{{ s.btn_copy }}</button>
+    <a class="chip" id="btn-download" href="/api/scan/report" download="nas-gate-scan.txt">{{ s.btn_download }}</a>
+  </div>
   <div class="scan-head">
     <span class="score" id="scan-score">–</span>
     <span class="muted small" id="scan-meta">{{ s.never_scanned }}</span>
   </div>
   <ul id="findings" class="findings"></ul>
+</section>
+
+<section class="card">
+  <div class="top"><h2>{{ s.update }}</h2>
+    <button class="ghost" id="btn-check-update">{{ s.btn_check_update }}</button></div>
+  <div class="small muted" id="update-line">{{ s.version }}: <span dir="ltr" id="version">…</span></div>
+  <button class="primary big hidden" id="btn-update">{{ s.btn_update }}</button>
+  <div class="small" id="update-result"></div>
 </section>
 
 <details class="card">
@@ -91,6 +103,12 @@
     <label>{{ s.dsm_password }}<input type="password" name="dsm_password" dir="ltr" value="" placeholder="{{ settings.dsm_password }}" autocomplete="new-password"></label>
     <button type="button" class="ghost" id="btn-test-dsm">{{ s.btn_test_dsm }}</button>
     <pre id="dsm-result" class="small hidden"></pre>
+
+    <h3>{{ s.update }}</h3>
+    <p class="muted small">{{ s.update_hint }}</p>
+    <label>{{ s.image }}<input type="text" name="image" dir="ltr" value="{{ settings.image }}"></label>
+    <label>{{ s.watchtower_url }}<input type="text" name="watchtower_url" dir="ltr" value="{{ settings.watchtower_url }}"></label>
+    <label>{{ s.watchtower_token }}<input type="password" name="watchtower_token" dir="ltr" value="" placeholder="{{ settings.watchtower_token }}" autocomplete="new-password"></label>
 
     <h3>{{ s.notifications }}</h3>
     <label>{{ s.notify_mode }}
@@ -154,6 +172,7 @@ function fmtDur(sec) {
 }
 function render(st) {
   status = st;
+  if (st.version !== undefined) renderUpdate(st.update, st.version);
   $('#state').textContent = st.is_open ? S.status_open : S.status_closed;
   $('#status').classList.toggle('is-open', st.is_open);
   $('#closed-controls').classList.toggle('hidden', st.is_open);
@@ -210,6 +229,33 @@ $('#btn-test-notify').onclick = async () => { const r = await api('/api/test/not
 $('#btn-token').onclick = async () => { const r = await api('/api/token', {method: 'GET'}); $('#token').classList.remove('hidden'); $('#token').textContent = r.api_token + '\n' + 'fingerprint: ' + r.fingerprint; };
 document.querySelector(`.chip[data-min="${chosen}"]`)?.classList.add('on');
 
+
+let scanText = '';
+async function copyText(text) {
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch (e) {}
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta); return ok;
+}
+$('#btn-copy').onclick = async () => {
+  const r = await fetch('/api/scan/report'); if (!r.ok) return;
+  const ok = await copyText(await r.text());
+  $('#btn-copy').textContent = ok ? S.copied : S.btn_copy; setTimeout(() => $('#btn-copy').textContent = S.btn_copy, 2000);
+};
+function renderUpdate(u, version) {
+  $('#version').textContent = version || (u && u.running) || '';
+  if (!u) return;
+  let txt = u.update_available === true ? S.update_available : u.update_available === false ? S.up_to_date : S.update_unknown + (u.error ? ' · ' + u.error : '');
+  $('#update-result').textContent = txt;
+  $('#btn-update').classList.toggle('hidden', u.update_available !== true);
+}
+$('#btn-check-update').onclick = async () => { $('#update-result').textContent = '…'; const u = await api('/api/update/check'); renderUpdate(u); };
+$('#btn-update').onclick = async () => {
+  if (!confirm(S.update_confirm)) return;
+  const r = await api('/api/update/apply');
+  $('#update-result').textContent = r && r.ok ? S.update_started : (r && r.error) || 'error';
+};
 function renderScan(sc) {
   if (!sc || sc.score === null || sc.score === undefined) { return; }
   const el = $('#scan-score'); el.textContent = sc.score;

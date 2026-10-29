@@ -359,3 +359,22 @@ def apply_fix(settings: config.Settings, fix_id: str,
         dsm.request(spec["api"], spec["method"], **params)
         after = dsm.request(api_get, m_get)
     return {"ok": True, "fix": fix_id, "after": {k: after.get(k) for k in spec["params"]}}
+
+
+def report_text(result: ScanResult, lang: str = "en") -> str:
+    """Plain-text report for copying or downloading."""
+    from datetime import datetime
+    from .i18n import t
+    lines = [f"NAS Gate · {t(lang, 'scan')}",
+             f"{t(lang, 'last_scan')}: {datetime.fromtimestamp(result.finished_at).strftime('%Y-%m-%d %H:%M')}",
+             f"{t(lang, 'score')}: {result.score}/100", ""]
+    for f in result.findings:
+        sev = t(lang, f"sev_{f['severity']}")
+        title = t(lang, f["title_key"])
+        detail = f" ({f['detail']})" if f.get("detail") else ""
+        lines.append(f"[{sev}] {title}{detail}")
+        if f.get("advice_key"):
+            lines.append(f"    {t(lang, f['advice_key'])}")
+    if result.errors:
+        lines += ["", "errors:"] + [f"  {e}" for e in result.errors]
+    return "\n".join(lines) + "\n"

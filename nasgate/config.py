@@ -57,6 +57,11 @@ class Settings:
     ha_notify_service: str = "notify.notify"
     webhook_url: str = ""
 
+    # --- self update (see update.py) ------------------------------------
+    image: str = "ghcr.io/yaniv376/nas-gate"
+    watchtower_url: str = "http://127.0.0.1:8085"
+    watchtower_token: str = ""
+
     # --- security ----------------------------------------------------------
     password_hash: str = ""              # scrypt, "salt$hash" hex
     session_secret: str = ""             # HMAC key for session cookies
@@ -69,7 +74,7 @@ class Settings:
         d = asdict(self)
         for key in ("password_hash", "session_secret", "session_epoch"):
             d.pop(key, None)
-        for key in ("dsm_password", "ha_token", "api_token"):
+        for key in ("dsm_password", "ha_token", "api_token", "watchtower_token"):
             d[key] = "••••••" if d.get(key) else ""
         return d
 
@@ -80,9 +85,10 @@ EDITABLE_FIELDS = {
     "manage_quickconnect", "manage_ssh", "ssh_port", "ssh_trusted_hosts",
     "dsm_url", "dsm_user", "dsm_password", "dsm_verify_tls",
     "notify_mode", "ha_url", "ha_token", "ha_notify_service", "webhook_url",
+    "image", "watchtower_url", "watchtower_token",
 }
 
-SECRET_FIELDS = {"dsm_password", "ha_token", "api_token"}
+SECRET_FIELDS = {"dsm_password", "ha_token", "api_token", "watchtower_token"}
 
 _lock = threading.RLock()
 

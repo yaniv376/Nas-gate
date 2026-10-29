@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, notify, scan
+from . import config, notify, scan, update
 from .dsm import DSMClient, DSMError
 from .engine import GateEngine
 from .i18n import all_strings, t
@@ -157,6 +157,8 @@ def create_app(engine: GateEngine) -> FastAPI:
         }
         last = scan.load()
         out["scan"] = last.summary() if last else None
+        out["version"] = update.VERSION
+        out["update"] = update.as_dict(update.cached())
         if live:
             for cid, cs in engine.live_status().items():
                 out["protections"][cid].update({"live": cs.live, "detail": cs.detail})
@@ -244,6 +246,26 @@ def create_app(engine: GateEngine) -> FastAPI:
             return _with_session(JSONResponse({"ok": False, "fix": fix_id, "error": str(e)}), request)
         engine.state.add_log("fix", fix_id)
         return _with_session(JSONResponse(out), request)
+
+    @app.get("/api/scan/report")
+    def api_scan_report(request: Request, _=Depends(require_auth)):
+        last = scan.load()
+        if not last:
+            raise HTTPException(status_code=404, detail="no scan yet")
+        text = scan.report_text(last, settings.language)
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(text, headers={
+            "Content-Disposition": 'attachment; filename="nas-gate-scan.txt"'})
+
+    # -- self update ---------------------------------------------------------
+    @app.post("/api/update/check")
+    def api_update_check(request: Request, _=Depends(require_auth)):
+        return _with_session(JSONResponse(update.as_dict(update.check(settings))), request)
+
+    @app.post("/api/update/apply")
+    def api_update_apply(request: Request, _=Depends(require_auth)):
+        engine.state.add_log("update", "requested")
+        return _with_session(JSONResponse(update.apply(settings)), request)
 
     @app.get("/api/token")
     def api_token(request: Request, _=Depends(require_auth)):

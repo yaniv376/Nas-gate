@@ -8,8 +8,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY nasgate ./nasgate
 
+ARG VERSION=dev
+ARG BUILD_DATE=""
 ENV NASGATE_DATA_DIR=/data \
     NASGATE_PORT=8787 \
+    NASGATE_VERSION=$VERSION \
+    NASGATE_BUILD_DATE=$BUILD_DATE \
     PYTHONUNBUFFERED=1
 VOLUME ["/data"]
 EXPOSE 8787

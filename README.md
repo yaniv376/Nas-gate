@@ -108,8 +108,29 @@ Assistant.
 
 ## Updating
 
-Pull the new image in Container Manager and rebuild the project. Settings
-and state live in `/data` and are kept.
+The page has an *Updates* card: *Check for updates* compares the running
+build with the newest image in the registry, and *Update now* asks your
+**Watchtower** container to pull it and recreate the gate (a restart of
+about a minute; settings and state live in `/data` and are kept).
+
+Watchtower setup, once (in its compose):
+
+```yaml
+services:
+  watchtower:
+    image: containrrr/watchtower
+    environment:
+      WATCHTOWER_HTTP_API_UPDATE: "true"
+      WATCHTOWER_HTTP_API_TOKEN: "choose-a-long-random-token"
+      WATCHTOWER_HTTP_API_PERIODIC_POLLS: "true"   # keep its normal schedule too
+    ports:
+      - "8085:8080"
+```
+
+Then put the same token under *Settings → Updates* on the gate page
+(Watchtower address defaults to `http://127.0.0.1:8085`). Without Watchtower,
+update by hand: Container Manager → Project → stop and clean the project,
+delete the image, build again.
 
 ## Roadmap
 

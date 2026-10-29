@@ -15,16 +15,19 @@ rest:
         unique_id: nas_gate_open
         icon: mdi:nas
         value_template: "{{ value_json.is_open }}"
+        availability: "{{ value_json.is_open is defined }}"
     sensor:
       - name: "NAS Gate remaining"
         unique_id: nas_gate_remaining
         icon: mdi:timer-outline
         unit_of_measurement: min
         value_template: "{{ (value_json.remaining_seconds / 60) | round(0) | int }}"
+        availability: "{{ value_json.remaining_seconds is defined }}"
       - name: "NAS Gate status"
         unique_id: nas_gate_status
         icon: mdi:nas
         value_template: "{{ 'open' if value_json.is_open else 'closed' }}"
+        availability: "{{ value_json.is_open is defined }}"
         json_attributes_path: "$"
         json_attributes: [expires_at, remaining_seconds, last_close_reason, protections, applied]
 

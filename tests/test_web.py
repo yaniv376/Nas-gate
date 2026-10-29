@@ -51,8 +51,8 @@ def test_api_token_access(client):
 def test_settings_update_keeps_secret_when_blank(client):
     c, s = client
     c.post("/setup", data={"password": "longenough1", "password2": "longenough1"}, follow_redirects=False)
-    c.post("/api/settings", json={"dsm_password": "secret1", "ssh_trusted_hosts": "192.168.4.5, 10.0.0.0/24"})
-    assert s.dsm_password == "secret1" and s.ssh_trusted_hosts == ["192.168.4.5", "10.0.0.0/24"]
+    c.post("/api/settings", json={"dsm_password": "secret1", "ssh_trusted_hosts": "192.168.1.5, 10.0.0.0/24"})
+    assert s.dsm_password == "secret1" and s.ssh_trusted_hosts == ["192.168.1.5", "10.0.0.0/24"]
     c.post("/api/settings", json={"dsm_password": "", "ssh_port": "2222"})
     assert s.dsm_password == "secret1" and s.ssh_port == 2222
     assert c.get("/api/settings").json()["dsm_password"] == "••••••"

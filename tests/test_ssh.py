@@ -35,21 +35,21 @@ class FakeIpt:
 
 
 def test_closed_allows_only_trusted_hosts():
-    s = Settings(ssh_port=22, ssh_trusted_hosts=["192.168.4.20", "10.0.0.0/24"])
+    s = Settings(ssh_port=22, ssh_trusted_hosts=["192.168.1.20", "10.0.0.0/24"])
     ipt = FakeIpt(); ctl = SSHController(s, runner=ipt)
     ctl.apply(False)
     assert ipt.jump
     assert ipt.chain == [
-        f"-A {CHAIN} -s 192.168.4.20/32 -p tcp --dport 22 -j RETURN",
+        f"-A {CHAIN} -s 192.168.1.20/32 -p tcp --dport 22 -j RETURN",
         f"-A {CHAIN} -s 10.0.0.0/24 -p tcp --dport 22 -j RETURN",
         f"-A {CHAIN} -p tcp --dport 22 -j DROP",
     ]
     st = ctl.status()
-    assert st.live == "closed" and "192.168.4.20/32" in st.detail
+    assert st.live == "closed" and "192.168.1.20/32" in st.detail
 
 
 def test_open_flushes_rules():
-    s = Settings(ssh_trusted_hosts=["192.168.4.20"])
+    s = Settings(ssh_trusted_hosts=["192.168.1.20"])
     ipt = FakeIpt(); ctl = SSHController(s, runner=ipt)
     ctl.apply(False); ctl.apply(True)
     assert ipt.chain == [] and ctl.status().live == "open"

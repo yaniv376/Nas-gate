@@ -16,6 +16,12 @@ rest:
         icon: mdi:nas
         value_template: "{{ value_json.is_open }}"
         availability: "{{ value_json.is_open is defined }}"
+      - name: "NAS Gate update available"
+        unique_id: nas_gate_update_available
+        icon: mdi:package-up
+        device_class: update
+        value_template: "{{ value_json.update.update_available if value_json.update else false }}"
+        availability: "{{ value_json.is_open is defined }}"
     sensor:
       - name: "NAS Gate remaining"
         unique_id: nas_gate_remaining
@@ -29,9 +35,32 @@ rest:
         value_template: "{{ 'open' if value_json.is_open else 'closed' }}"
         availability: "{{ value_json.is_open is defined }}"
         json_attributes_path: "$"
-        json_attributes: [expires_at, remaining_seconds, last_close_reason, protections, applied]
+        json_attributes: [expires_at, remaining_seconds, last_close_reason, protections, applied, scan, version, update]
+      - name: "NAS Gate scan score"
+        unique_id: nas_gate_scan_score
+        icon: mdi:shield-search
+        value_template: "{{ value_json.scan.score if value_json.scan else 'unknown' }}"
+        availability: "{{ value_json.is_open is defined }}"
 
 rest_command:
+  nas_gate_scan:
+    url: "http://NAS_IP:8787/api/scan"
+    method: POST
+    timeout: 90
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
+  nas_gate_update_check:
+    url: "http://NAS_IP:8787/api/update/check"
+    method: POST
+    timeout: 30
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
+  nas_gate_update_apply:
+    url: "http://NAS_IP:8787/api/update/apply"
+    method: POST
+    timeout: 30
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
   nas_gate_open:
     url: "http://NAS_IP:8787/api/open?minutes={{ minutes | int }}"
     method: POST

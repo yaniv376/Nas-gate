@@ -1,0 +1,46 @@
+# Scripts (create in Settings → Automations & Scenes → Scripts, "Edit in YAML")
+# and one automation that turns the gate's phone-notification buttons into calls.
+script:
+  nas_gate_open:
+    alias: "NAS gate: open"
+    fields:
+      minutes: {name: Minutes, default: 60, selector: {number: {min: 5, max: 1440}}}
+    sequence:
+      - action: rest_command.nas_gate_open
+        data: {minutes: "{{ minutes }}"}
+      - action: homeassistant.update_entity
+        target: {entity_id: [binary_sensor.nas_gate, sensor.nas_gate_remaining, sensor.nas_gate_status]}
+  nas_gate_extend:
+    alias: "NAS gate: extend"
+    fields:
+      minutes: {name: Minutes, default: 60, selector: {number: {min: 5, max: 1440}}}
+    sequence:
+      - action: rest_command.nas_gate_extend
+        data: {minutes: "{{ minutes }}"}
+      - action: homeassistant.update_entity
+        target: {entity_id: [binary_sensor.nas_gate, sensor.nas_gate_remaining, sensor.nas_gate_status]}
+  nas_gate_close:
+    alias: "NAS gate: close"
+    sequence:
+      - action: rest_command.nas_gate_close
+      - action: homeassistant.update_entity
+        target: {entity_id: [binary_sensor.nas_gate, sensor.nas_gate_remaining, sensor.nas_gate_status]}
+
+automation:
+  - alias: "NAS gate: notification buttons"
+    mode: queued
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: {action: NAS_GATE_EXTEND_60}
+        id: extend
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: {action: NAS_GATE_CLOSE}
+        id: close
+    actions:
+      - choose:
+          - conditions: [{condition: trigger, id: extend}]
+            sequence: [{action: script.nas_gate_extend, data: {minutes: 60}}]
+          - conditions: [{condition: trigger, id: close}]
+            sequence: [{action: script.nas_gate_close}]

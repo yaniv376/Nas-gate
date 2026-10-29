@@ -76,36 +76,23 @@ SSH session on the NAS or from DSM's Task Scheduler:
 iptables -D INPUT -j NASGATE; iptables -F NASGATE; iptables -X NASGATE
 ```
 
-## Home Assistant integration (manual, stage 1)
+## Home Assistant integration
 
 The page shows an API token under *Settings → Home Assistant integration*.
+Paste it into a **Text helper** (mode *password*) named `NAS Gate token`
+in Home Assistant, then install the package and scripts from
+[`examples/homeassistant/`](examples/homeassistant/):
 
-```yaml
-rest:
-  - resource: http://<nas-ip>:8787/api/status
-    headers:
-      Authorization: "Bearer <api token>"
-    scan_interval: 30
-    binary_sensor:
-      - name: NAS gate open
-        value_template: "{{ value_json.is_open }}"
-    sensor:
-      - name: NAS gate remaining
-        value_template: "{{ (value_json.remaining_seconds / 60) | round(0) }}"
-        unit_of_measurement: min
+* `nas_gate.yaml` — REST sensors (`binary_sensor.nas_gate`,
+  `sensor.nas_gate_remaining`, `sensor.nas_gate_status`) and the
+  `rest_command.nas_gate_open / extend / close` commands.
+* `scripts_and_automation.yaml` — three scripts for dashboard buttons, and
+  the automation that makes the phone notification's **+1 hour** and
+  **Close now** buttons work (the gate sends them as Companion app actions
+  `NAS_GATE_EXTEND_60` and `NAS_GATE_CLOSE`).
 
-rest_command:
-  nas_gate_open:
-    url: http://<nas-ip>:8787/api/open?minutes=60
-    method: POST
-    headers:
-      Authorization: "Bearer <api token>"
-  nas_gate_close:
-    url: http://<nas-ip>:8787/api/close
-    method: POST
-    headers:
-      Authorization: "Bearer <api token>"
-```
+A dashboard card example follows the same pattern as the Home Assistant
+agent gate: status, four duration buttons, extend, close.
 
 ## Updating
 

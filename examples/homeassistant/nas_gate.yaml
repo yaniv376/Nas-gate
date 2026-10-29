@@ -1,0 +1,49 @@
+# Home Assistant package for NAS Gate.
+# 1. Create a Text helper (mode: password) named "NAS Gate token" and paste the
+#    gate's API token (Settings → Home Assistant integration on the gate page).
+# 2. Copy this file to config/packages/nas_gate.yaml (packages must be enabled:
+#    `homeassistant: packages: !include_dir_named packages`), replace the NAS
+#    address, restart Home Assistant once.
+rest:
+  - resource: "http://NAS_IP:8787/api/status?live=true"
+    scan_interval: 120
+    timeout: 15
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
+    binary_sensor:
+      - name: "NAS Gate"
+        unique_id: nas_gate_open
+        icon: mdi:nas
+        value_template: "{{ value_json.is_open }}"
+    sensor:
+      - name: "NAS Gate remaining"
+        unique_id: nas_gate_remaining
+        icon: mdi:timer-outline
+        unit_of_measurement: min
+        value_template: "{{ (value_json.remaining_seconds / 60) | round(0) | int }}"
+      - name: "NAS Gate status"
+        unique_id: nas_gate_status
+        icon: mdi:nas
+        value_template: "{{ 'open' if value_json.is_open else 'closed' }}"
+        json_attributes_path: "$"
+        json_attributes: [expires_at, remaining_seconds, last_close_reason, protections, applied]
+
+rest_command:
+  nas_gate_open:
+    url: "http://NAS_IP:8787/api/open?minutes={{ minutes | int }}"
+    method: POST
+    timeout: 20
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
+  nas_gate_extend:
+    url: "http://NAS_IP:8787/api/extend?minutes={{ minutes | int }}"
+    method: POST
+    timeout: 20
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
+  nas_gate_close:
+    url: "http://NAS_IP:8787/api/close"
+    method: POST
+    timeout: 20
+    headers:
+      Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"

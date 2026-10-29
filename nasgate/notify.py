@@ -32,12 +32,29 @@ def _send_ha(s: Settings, title: str, message: str, event: str) -> bool:
     if service.startswith("notify."):
         service = service[len("notify."):]
     url = f"{s.ha_url.rstrip('/')}/api/services/notify/{service}"
-    payload = {"title": title, "message": message,
-               "data": {"tag": "nas-gate", "group": "nas-gate", "event": event}}
+    data: dict = {"tag": "nas-gate", "group": "nas-gate", "event": event}
+    # Action buttons for the Home Assistant Companion app. An automation in HA
+    # listening for `mobile_app_notification_action` turns them into API calls
+    # (see README, "Home Assistant integration").
+    if event in ("n_opened", "n_reminder", "n_warning"):
+        lang = s.language
+        data["actions"] = [
+            {"action": "NAS_GATE_EXTEND_60", "title": _label(lang, "extend")},
+            {"action": "NAS_GATE_CLOSE", "title": _label(lang, "close")},
+        ]
+    payload = {"title": title, "message": message, "data": data}
     r = httpx.post(url, json=payload, timeout=10,
                    headers={"Authorization": f"Bearer {s.ha_token}"})
     r.raise_for_status()
     return True
+
+
+def _label(lang: str, key: str) -> str:
+    labels = {
+        "en": {"extend": "+1 hour", "close": "Close now"},
+        "he": {"extend": "+ שעה", "close": "סגור עכשיו"},
+    }
+    return labels.get(lang, labels["en"])[key]
 
 
 def _send_webhook(s: Settings, title: str, message: str, event: str) -> bool:

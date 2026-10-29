@@ -197,7 +197,7 @@ $('#btn-test-dsm').onclick = async () => {
   $('#dsm-result').textContent = JSON.stringify(r, null, 1);
 };
 $('#btn-test-notify').onclick = async () => { const r = await api('/api/test/notify'); $('#notify-result').textContent = r && r.ok ? '✓' : '✗'; };
-$('#btn-token').onclick = async () => { const r = await api('/api/token', {method: 'GET'}); $('#token').classList.remove('hidden'); $('#token').textContent = r.api_token; };
+$('#btn-token').onclick = async () => { const r = await api('/api/token', {method: 'GET'}); $('#token').classList.remove('hidden'); $('#token').textContent = r.api_token + '\n' + 'fingerprint: ' + r.fingerprint; };
 document.querySelector(`.chip[data-min="${chosen}"]`)?.classList.add('on');
 refresh(true);
 setInterval(() => refresh(false), 15000);

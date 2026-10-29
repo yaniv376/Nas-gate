@@ -33,6 +33,10 @@ templates = Jinja2Templates(directory=str(HERE / "templates"))
 COOKIE = "nasgate_session"
 
 
+def _fingerprint(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()[:8]
+
+
 def create_app(engine: GateEngine) -> FastAPI:
     app = FastAPI(title="NAS Gate", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
@@ -217,7 +221,14 @@ def create_app(engine: GateEngine) -> FastAPI:
         # Only cookie sessions may read the token (never the token itself).
         if not _valid_cookie(request.cookies.get(COOKIE)):
             raise HTTPException(status_code=403)
-        return JSONResponse({"api_token": settings.api_token})
+        return JSONResponse({"api_token": settings.api_token,
+                             "fingerprint": _fingerprint(settings.api_token)})
+
+    @app.get("/api/token/fingerprint")
+    def api_token_fingerprint(request: Request, _=Depends(require_auth)):
+        """Short hash of the API token, safe to show when comparing a copy
+        pasted elsewhere (for example in a Home Assistant helper)."""
+        return JSONResponse({"fingerprint": _fingerprint(settings.api_token)})
 
     @app.get("/health")
     def health():

@@ -135,10 +135,12 @@ def check_smb(dsm: DSMClient) -> list[Finding]:
     s = dsm.request("SYNO.Core.FileServ.SMB", "get")
     if not _bool(s.get("enable_samba", True)):
         return [Finding("smb1", "ok", "f_smb_off")]
-    minp = str(s.get("smb_min_protocol", "")).upper()
+    raw = s.get("smb_min_protocol", "")
+    minp = str(raw).upper()
+    label = {"1": "SMB1", "2": "SMB2", "3": "SMB3"}.get(minp, minp)
     if minp in ("SMB1", "NT1", "1"):
-        return [Finding("smb1", "high", "f_smb1", minp, "a_smb1", fix="smb_min_smb2")]
-    return [Finding("smb1", "ok", "f_smb_min", minp)]
+        return [Finding("smb1", "high", "f_smb1", label, "a_smb1", fix="smb_min_smb2")]
+    return [Finding("smb1", "ok", "f_smb_min", label)]
 
 
 def check_admin_account(dsm: DSMClient) -> list[Finding]:
@@ -180,9 +182,12 @@ def check_quickconnect(dsm: DSMClient, gate_open: bool) -> list[Finding]:
 def check_security_advisor(dsm: DSMClient) -> list[Finding]:
     """Pull DSM's own Security Advisor results when the API exposes them."""
     st = dsm.request("SYNO.Core.SecurityScan.Status", "system_get")
-    items = st.get("items") or st.get("list") or []
-    bad = [i for i in items if str(i.get("status", i.get("result", ""))).lower()
-           in ("fail", "failed", "warning", "danger", "critical")]
+    items = st.get("items") or st.get("list") or st.get("results") or []
+    if isinstance(items, dict):
+        items = [v if isinstance(v, dict) else {"title": k, "status": v} for k, v in items.items()]
+    items = [i if isinstance(i, dict) else {"title": str(i)} for i in items]
+    bad = [i for i in items if str(i.get("status", i.get("result", i.get("severity", "")))).lower()
+           in ("fail", "failed", "warning", "danger", "critical", "warn")]
     last = st.get("lastScanTime") or st.get("last_scan_time")
     if not items:
         return [Finding("advisor", "low", "f_advisor_never", "", "a_advisor")]
@@ -280,7 +285,12 @@ def run_scan(settings: config.Settings, gate_open: bool, proc_dir: str = "/proc/
     except Exception as e:  # noqa: BLE001
         errors.append(f"listening: {e}")
 
-    penalty = sum(SEVERITY_WEIGHT.get(f.severity, 0) for f in findings)
+    penalty = 0
+    for f in findings:
+        w = SEVERITY_WEIGHT.get(f.severity, 0)
+        if f.id.startswith("port_"):
+            w = min(w, 4)            # a LAN-only service is a hint, not a hole
+        penalty += w
     score = max(0, 100 - penalty)
     counts: dict[str, int] = {}
     for f in findings:
@@ -355,7 +365,10 @@ def apply_fix(settings: config.Settings, fix_id: str,
                 params[k] = v
             else:
                 params[k] = json.dumps(v)
-        params.update(spec["params"])
+        fix_params = dict(spec["params"])
+        if fix_id == "smb_min_smb2" and str(current.get("smb_min_protocol", "")).isdigit():
+            fix_params["smb_min_protocol"] = "2"
+        params.update(fix_params)
         dsm.request(spec["api"], spec["method"], **params)
         after = dsm.request(api_get, m_get)
     return {"ok": True, "fix": fix_id, "after": {k: after.get(k) for k in spec["params"]}}

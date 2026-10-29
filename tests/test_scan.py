@@ -89,7 +89,7 @@ def test_weak_nas_flags_everything(scanmod, tmp_path):
     assert by_id["port_23"]["severity"] == "critical" and by_id["port_9000"]["severity"] == "medium"
     assert by_id["advisor_unchecked"]["severity"] == "low"
     assert r.findings[0]["severity"] == "critical"            # sorted worst first
-    assert r.score == 0
+    assert r.score < 20
     assert any("advisor" in e for e in r.errors)
 
 

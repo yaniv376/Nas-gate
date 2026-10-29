@@ -1,28 +1,35 @@
 # Scripts (create in Settings → Automations & Scenes → Scripts, "Edit in YAML")
 # and one automation that turns the gate's phone-notification buttons into calls.
+# `protections` is "all" (default), "ssh", "quickconnect" or "ssh,quickconnect":
+# every protection has its own window and timer.
 script:
   nas_gate_open:
     alias: "NAS gate: open"
     fields:
       minutes: {name: Minutes, default: 60, selector: {number: {min: 5, max: 1440}}}
+      protections: {name: Protections, default: all, selector: {select: {options: [all, ssh, quickconnect]}}}
     sequence:
       - action: rest_command.nas_gate_open
-        data: {minutes: "{{ minutes }}"}
+        data: {minutes: "{{ minutes }}", protections: "{{ protections }}"}
       - action: homeassistant.update_entity
         target: {entity_id: [binary_sensor.nas_gate, sensor.nas_gate_remaining, sensor.nas_gate_status]}
   nas_gate_extend:
     alias: "NAS gate: extend"
     fields:
       minutes: {name: Minutes, default: 60, selector: {number: {min: 5, max: 1440}}}
+      protections: {name: Protections, default: all, selector: {select: {options: [all, ssh, quickconnect]}}}
     sequence:
       - action: rest_command.nas_gate_extend
-        data: {minutes: "{{ minutes }}"}
+        data: {minutes: "{{ minutes }}", protections: "{{ protections }}"}
       - action: homeassistant.update_entity
         target: {entity_id: [binary_sensor.nas_gate, sensor.nas_gate_remaining, sensor.nas_gate_status]}
   nas_gate_close:
     alias: "NAS gate: close"
+    fields:
+      protections: {name: Protections, default: all, selector: {select: {options: [all, ssh, quickconnect]}}}
     sequence:
       - action: rest_command.nas_gate_close
+        data: {protections: "{{ protections }}"}
       - action: homeassistant.update_entity
         target: {entity_id: [binary_sensor.nas_gate, sensor.nas_gate_remaining, sensor.nas_gate_status]}
 
@@ -30,6 +37,8 @@ automation:
   - alias: "NAS gate: notification buttons"
     mode: queued
     triggers:
+      # Generic buttons (sent when every protection was opened together) and
+      # per-protection buttons (NAS_GATE_CLOSE_SSH, NAS_GATE_EXTEND_60_QUICKCONNECT ...).
       - trigger: event
         event_type: mobile_app_notification_action
         event_data: {action: NAS_GATE_EXTEND_60}
@@ -38,9 +47,33 @@ automation:
         event_type: mobile_app_notification_action
         event_data: {action: NAS_GATE_CLOSE}
         id: close
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: {action: NAS_GATE_EXTEND_60_SSH}
+        id: extend_ssh
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: {action: NAS_GATE_CLOSE_SSH}
+        id: close_ssh
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: {action: NAS_GATE_EXTEND_60_QUICKCONNECT}
+        id: extend_quickconnect
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: {action: NAS_GATE_CLOSE_QUICKCONNECT}
+        id: close_quickconnect
     actions:
       - choose:
           - conditions: [{condition: trigger, id: extend}]
-            sequence: [{action: script.nas_gate_extend, data: {minutes: 60}}]
+            sequence: [{action: script.nas_gate_extend, data: {minutes: 60, protections: all}}]
           - conditions: [{condition: trigger, id: close}]
-            sequence: [{action: script.nas_gate_close}]
+            sequence: [{action: script.nas_gate_close, data: {protections: all}}]
+          - conditions: [{condition: trigger, id: extend_ssh}]
+            sequence: [{action: script.nas_gate_extend, data: {minutes: 60, protections: ssh}}]
+          - conditions: [{condition: trigger, id: close_ssh}]
+            sequence: [{action: script.nas_gate_close, data: {protections: ssh}}]
+          - conditions: [{condition: trigger, id: extend_quickconnect}]
+            sequence: [{action: script.nas_gate_extend, data: {minutes: 60, protections: quickconnect}}]
+          - conditions: [{condition: trigger, id: close_quickconnect}]
+            sequence: [{action: script.nas_gate_close, data: {protections: quickconnect}}]

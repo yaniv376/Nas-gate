@@ -16,6 +16,16 @@ rest:
         icon: mdi:nas
         value_template: "{{ value_json.is_open }}"
         availability: "{{ value_json.is_open is defined }}"
+      - name: "NAS Gate SSH"
+        unique_id: nas_gate_ssh_open
+        icon: mdi:console-network
+        value_template: "{{ value_json.protections.ssh.is_open }}"
+        availability: "{{ value_json.protections.ssh is defined }}"
+      - name: "NAS Gate QuickConnect"
+        unique_id: nas_gate_quickconnect_open
+        icon: mdi:cloud-key
+        value_template: "{{ value_json.protections.quickconnect.is_open }}"
+        availability: "{{ value_json.protections.quickconnect is defined }}"
       - name: "NAS Gate update available"
         unique_id: nas_gate_update_available
         icon: mdi:package-up
@@ -29,6 +39,18 @@ rest:
         unit_of_measurement: min
         value_template: "{{ (value_json.remaining_seconds / 60) | round(0) | int }}"
         availability: "{{ value_json.remaining_seconds is defined }}"
+      - name: "NAS Gate SSH remaining"
+        unique_id: nas_gate_ssh_remaining
+        icon: mdi:timer-outline
+        unit_of_measurement: min
+        value_template: "{{ (value_json.protections.ssh.remaining_seconds / 60) | round(0) | int }}"
+        availability: "{{ value_json.protections.ssh is defined }}"
+      - name: "NAS Gate QuickConnect remaining"
+        unique_id: nas_gate_quickconnect_remaining
+        icon: mdi:timer-outline
+        unit_of_measurement: min
+        value_template: "{{ (value_json.protections.quickconnect.remaining_seconds / 60) | round(0) | int }}"
+        availability: "{{ value_json.protections.quickconnect is defined }}"
       - name: "NAS Gate status"
         unique_id: nas_gate_status
         icon: mdi:nas
@@ -62,19 +84,19 @@ rest_command:
     headers:
       Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
   nas_gate_open:
-    url: "http://NAS_IP:8787/api/open?minutes={{ minutes | int }}"
+    url: "http://NAS_IP:8787/api/open?minutes={{ minutes | int }}&protections={{ protections | default('all') }}"
     method: POST
     timeout: 20
     headers:
       Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
   nas_gate_extend:
-    url: "http://NAS_IP:8787/api/extend?minutes={{ minutes | int }}"
+    url: "http://NAS_IP:8787/api/extend?minutes={{ minutes | int }}&protections={{ protections | default('all') }}"
     method: POST
     timeout: 20
     headers:
       Authorization: "Bearer {{ states('input_text.nas_gate_token') }}"
   nas_gate_close:
-    url: "http://NAS_IP:8787/api/close"
+    url: "http://NAS_IP:8787/api/close?protections={{ protections | default('all') }}"
     method: POST
     timeout: 20
     headers:

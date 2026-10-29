@@ -149,7 +149,11 @@ def create_app(engine: GateEngine) -> FastAPI:
             "last_close_reason": st.last_close_reason,
             "applied": st.applied,
             "protections": {
-                cid: {"managed": bool(getattr(settings, f"manage_{cid}", False))}
+                cid: {"managed": bool(getattr(settings, f"manage_{cid}", False)),
+                      "is_open": st.window_open(cid),
+                      "opened_at": st.window(cid)["opened_at"],
+                      "expires_at": st.window(cid)["expires_at"],
+                      "remaining_seconds": st.window_remaining(cid)}
                 for cid in engine.controllers
             },
             "log": st.log[-15:],
@@ -168,24 +172,39 @@ def create_app(engine: GateEngine) -> FastAPI:
     def api_status(request: Request, live: bool = False, _=Depends(require_auth)):
         return JSONResponse(_status_payload(live))
 
+    def _selection(protections: str | None) -> list[str] | None:
+        """`protections=ssh,quickconnect` picks windows; empty/None = all managed."""
+        if not protections or protections.strip().lower() == "all":
+            return None
+        sel = [p.strip() for p in protections.split(",") if p.strip()]
+        for cid in sel:
+            if cid not in engine.controllers:
+                raise HTTPException(status_code=404, detail=f"unknown protection: {cid}")
+        return sel
+
     @app.post("/api/open")
-    def api_open(request: Request, minutes: int, _=Depends(require_auth)):
+    def api_open(request: Request, minutes: int, protections: str | None = None,
+                 _=Depends(require_auth)):
         if minutes < 1 or minutes > 60 * 24 * 30:
             raise HTTPException(status_code=400, detail="minutes out of range")
-        errors = engine.open(minutes)
+        try:
+            errors = engine.open(minutes, _selection(protections))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         return _with_session(JSONResponse({**_status_payload(), "errors": errors}), request)
 
     @app.post("/api/extend")
-    def api_extend(request: Request, minutes: int, _=Depends(require_auth)):
+    def api_extend(request: Request, minutes: int, protections: str | None = None,
+                   _=Depends(require_auth)):
         try:
-            engine.extend(minutes)
+            engine.extend(minutes, _selection(protections))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return _with_session(JSONResponse(_status_payload()), request)
 
     @app.post("/api/close")
-    def api_close(request: Request, _=Depends(require_auth)):
-        errors = engine.close("manual")
+    def api_close(request: Request, protections: str | None = None, _=Depends(require_auth)):
+        errors = engine.close("manual", _selection(protections))
         return _with_session(JSONResponse({**_status_payload(), "errors": errors}), request)
 
     @app.post("/api/protections/{cid}")
@@ -224,7 +243,7 @@ def create_app(engine: GateEngine) -> FastAPI:
     # -- security scan ----------------------------------------------------------
     @app.post("/api/scan")
     def api_scan(request: Request, _=Depends(require_auth)):
-        result = scan.run_scan(settings, engine.state.is_open)
+        result = scan.run_scan(settings, engine.state.window_open("quickconnect"))
         engine.state.add_log("scan", f"score {result.score}")
         return _with_session(JSONResponse(asdict(result)), request)
 

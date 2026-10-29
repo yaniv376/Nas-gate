@@ -24,12 +24,12 @@
     <div id="custom-row" class="hidden">
       <input type="number" id="custom-min" min="1" value="{{ settings.default_open_minutes }}"> {{ s.minutes }}
     </div>
-    <button class="primary big" id="btn-open">{{ s.btn_open }}</button>
+    <button class="primary big" id="btn-open">{{ s.btn_open_all }}</button>
   </div>
 
   <div id="open-controls" class="hidden">
     <div class="row">
-      <button class="big danger" id="btn-close">{{ s.btn_close }}</button>
+      <button class="big danger" id="btn-close">{{ s.btn_close_all }}</button>
       <button class="big" id="btn-extend" data-min="60">{{ s.btn_extend }} 1 {{ s.hours }}</button>
     </div>
   </div>
@@ -38,22 +38,24 @@
 
 <section class="card">
   <h2>{{ s.protections }}</h2>
-  <div class="prot" data-id="quickconnect">
+  {% for cid in ['quickconnect', 'ssh'] %}
+  <div class="prot" data-id="{{ cid }}">
     <div class="prot-head">
-      <span class="name">{{ s.quickconnect }}</span>
-      <label class="switch"><input type="checkbox" class="manage" data-id="quickconnect"
-        {{ 'checked' if settings.manage_quickconnect }}><span></span></label>
+      <span class="name">{{ s[cid] }}</span>
+      <span class="pstate" data-pstate="{{ cid }}">…</span>
+      <label class="switch"><input type="checkbox" class="manage" data-id="{{ cid }}"
+        {{ 'checked' if settings['manage_' ~ cid] }}><span></span></label>
     </div>
-    <div class="live muted small" data-live="quickconnect">{{ s.live }}: …</div>
-  </div>
-  <div class="prot" data-id="ssh">
-    <div class="prot-head">
-      <span class="name">{{ s.ssh }}</span>
-      <label class="switch"><input type="checkbox" class="manage" data-id="ssh"
-        {{ 'checked' if settings.manage_ssh }}><span></span></label>
+    <div class="live muted small" data-live="{{ cid }}">{{ s.live }}: …</div>
+    <div class="row small pctl" data-pctl="{{ cid }}">
+      <button class="chip popen" data-id="{{ cid }}" data-min="30">{{ s.btn_open_one }} 30 {{ s.minutes }}</button>
+      <button class="chip popen" data-id="{{ cid }}" data-min="60">{{ s.btn_open_one }} 1 {{ s.hours }}</button>
+      <button class="chip popen" data-id="{{ cid }}" data-min="240">{{ s.btn_open_one }} 4 {{ s.hours }}</button>
+      <button class="chip pextend" data-id="{{ cid }}" data-min="60">{{ s.btn_extend }} 1 {{ s.hours }}</button>
+      <button class="chip danger pclose" data-id="{{ cid }}">{{ s.btn_close_one }}</button>
     </div>
-    <div class="live muted small" data-live="ssh">{{ s.live }}: …</div>
   </div>
+  {% endfor %}
 </section>
 
 <section class="card" id="scan">
@@ -173,7 +175,11 @@ function fmtDur(sec) {
 function render(st) {
   status = st;
   if (st.version !== undefined) renderUpdate(st.update, st.version);
-  $('#state').textContent = st.is_open ? S.status_open : S.status_closed;
+  const ids = Object.keys(st.protections);
+  const managed = ids.filter(c => st.protections[c].managed);
+  const openIds = managed.filter(c => st.protections[c].is_open);
+  const allOpen = managed.length > 0 && openIds.length === managed.length;
+  $('#state').textContent = !st.is_open ? S.status_closed : allOpen ? S.status_open : S.partly_open;
   $('#status').classList.toggle('is-open', st.is_open);
   $('#closed-controls').classList.toggle('hidden', st.is_open);
   $('#open-controls').classList.toggle('hidden', !st.is_open);
@@ -184,6 +190,17 @@ function render(st) {
     if (el && p.live) {
       const word = p.live === 'open' ? S.status_open : p.live === 'closed' ? S.status_closed : p.live;
       el.textContent = `${S.live}: ${word}${p.detail ? ' · ' + p.detail : ''}` + (p.managed ? '' : ` · ${S.unmanaged}`);
+    }
+    const ps = document.querySelector(`[data-pstate="${cid}"]`);
+    if (ps) {
+      ps.textContent = p.is_open ? `${S.status_open} · ${fmtDur(p.remaining_seconds)} (${fmtTime(p.expires_at)})` : S.status_closed;
+      ps.className = 'pstate ' + (p.is_open ? 'on' : '');
+    }
+    const row = document.querySelector(`[data-pctl="${cid}"]`);
+    if (row) {
+      row.classList.toggle('hidden', !p.managed);
+      row.querySelectorAll('.popen').forEach(b => b.classList.toggle('hidden', p.is_open));
+      row.querySelectorAll('.pextend, .pclose').forEach(b => b.classList.toggle('hidden', !p.is_open));
     }
   }
   $('#log').innerHTML = (st.log || []).slice().reverse().map(e =>
@@ -208,6 +225,15 @@ $('#btn-open').onclick = async () => {
 };
 $('#btn-close').onclick = async () => { const st = await api('/api/close'); if (st) render(st); refresh(true); };
 $('#btn-extend').onclick = async () => { const st = await api(`/api/extend?minutes=${$('#btn-extend').dataset.min}`); if (st) render(st); };
+document.querySelectorAll('.popen').forEach(b => b.onclick = async () => {
+  const st = await api(`/api/open?minutes=${b.dataset.min}&protections=${b.dataset.id}`); if (st) render(st); refresh(true);
+});
+document.querySelectorAll('.pextend').forEach(b => b.onclick = async () => {
+  const st = await api(`/api/extend?minutes=${b.dataset.min}&protections=${b.dataset.id}`); if (st) render(st);
+});
+document.querySelectorAll('.pclose').forEach(b => b.onclick = async () => {
+  const st = await api(`/api/close?protections=${b.dataset.id}`); if (st) render(st); refresh(true);
+});
 document.querySelectorAll('input.manage').forEach(cb => cb.onchange = async () => {
   const st = await api(`/api/protections/${cb.dataset.id}?managed=${cb.checked}`); if (st) render(st); refresh(true);
 });
@@ -285,6 +311,11 @@ $('#btn-scan').onclick = runScan;
 api('/api/scan', {method: 'GET'}).then(sc => renderScan(sc));
 refresh(true);
 setInterval(() => refresh(false), 15000);
-setInterval(() => { if (status && status.is_open) { status.remaining_seconds = Math.max(0, status.remaining_seconds - 1); render(status); } }, 1000);
+setInterval(() => {
+  if (!status || !status.is_open) return;
+  status.remaining_seconds = Math.max(0, status.remaining_seconds - 1);
+  for (const p of Object.values(status.protections)) if (p.is_open) p.remaining_seconds = Math.max(0, p.remaining_seconds - 1);
+  render(status);
+}, 1000);
 </script>
 {% endblock %}

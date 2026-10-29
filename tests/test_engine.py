@@ -107,3 +107,62 @@ def test_startup_is_noop_before_setup(env):
     eng.settings.password_hash = "x$y"
     eng.startup()
     assert qc.calls == [False] and ssh.calls == [False]
+
+
+# -- per-protection windows ---------------------------------------------------------
+
+def test_open_one_protection_only(env):
+    eng, qc, ssh, sent, now = make(env)
+    assert eng.open(30, ["ssh"]) == []
+    assert ssh.calls == [True] and qc.calls == []
+    assert eng.state.window_open("ssh") and not eng.state.window_open("quickconnect")
+    assert eng.state.is_open and eng.state.remaining_seconds(now[0]) == 1800
+    assert sent[-1][0] == "n_opened:ssh" and "SSH" in sent[-1][1]
+
+
+def test_independent_timers(env):
+    eng, qc, ssh, sent, now = make(env)
+    eng.open(10, ["ssh"])
+    eng.open(60, ["quickconnect"])
+    now[0] += 11 * 60; eng.tick()                 # ssh expired -> warning for ssh only
+    assert sent[-1][0] == "n_warning:ssh"
+    now[0] += 6 * 60; eng.tick()                  # grace over -> ssh closed, qc still open
+    assert not eng.state.window_open("ssh") and eng.state.window_open("quickconnect")
+    assert ssh.calls[-1] is False and qc.calls[-1] is True
+    assert eng.state.is_open and sent[-1][0] == "n_closed:ssh"
+
+
+def test_close_one_keeps_other(env):
+    eng, qc, ssh, sent, now = make(env)
+    eng.open(60)
+    assert eng.close("manual", ["ssh"]) == []
+    assert ssh.calls[-1] is False and qc.calls[-1] is True
+    assert eng.state.is_open and eng.state.open_ids() == ["quickconnect"]
+
+
+def test_extend_only_open_windows(env):
+    eng, qc, ssh, sent, now = make(env)
+    eng.open(10, ["ssh"])
+    eng.extend(30)                                # default: every open window
+    assert eng.state.window_remaining("ssh", now[0]) == 40 * 60
+    assert not eng.state.window_open("quickconnect")
+    with pytest.raises(ValueError):
+        eng.extend(5, ["quickconnect"])
+
+
+def test_grouped_notifications_when_opened_together(env):
+    eng, qc, ssh, sent, now = make(env)
+    eng.open(90)
+    assert sent[-1][0] == "n_opened"              # generic buttons for "everything"
+    now[0] += 61 * 60; eng.tick()
+    assert [e for e, *_ in sent].count("n_reminder") == 1
+
+
+def test_state_migration_from_single_window(env):
+    config, state, engine = env
+    import json
+    state.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    state.STATE_FILE.write_text(json.dumps({"is_open": True, "opened_at": 100.0, "expires_at": 5000.0,
+                                            "applied": {"ssh": "open", "quickconnect": "open"}}))
+    loaded = state.load()
+    assert loaded.windows["ssh"]["expires_at"] == 5000.0 and loaded.is_open

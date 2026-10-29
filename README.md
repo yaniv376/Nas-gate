@@ -4,8 +4,10 @@ An open/close security gate for a Synology NAS, in one Docker container.
 
 The gate keeps remote and shell access **closed by default**. When you need
 it, you open a window for as long as you choose from a phone friendly page.
-While the window is open the gate reminds you; when it ends, the gate warns
-you and then closes everything again by itself.
+Every protection has its own window and timer: open only SSH for 30 minutes,
+or only QuickConnect for the evening, or everything at once. While a window
+is open the gate reminds you; when it ends, the gate warns you and then closes
+that protection again by itself.
 
 It is the NAS counterpart of the
 [Home Assistant agent gate](https://github.com/yaniv376/ha-agent-gate) and is
@@ -22,6 +24,7 @@ Plus:
 
 * one personal password for the page, auto lock after idle time, manual lock button
 * reminders while open, warning before auto close, closing report, all to your phone (Home Assistant or any webhook)
+* every protection has its own window and timer (open, extend and close one at a time, or *Open everything*)
 * every protection has its own on/off switch, so you can leave one unmanaged
 * an API token so Home Assistant can show the state and open or close the gate (stage 2 adds a ready made dashboard card)
 * Hebrew and English UI
@@ -83,13 +86,21 @@ Paste it into a **Text helper** (mode *password*) named `NAS Gate token`
 in Home Assistant, then install the package and scripts from
 [`examples/homeassistant/`](examples/homeassistant/):
 
-* `nas_gate.yaml` — REST sensors (`binary_sensor.nas_gate`,
-  `sensor.nas_gate_remaining`, `sensor.nas_gate_status`) and the
-  `rest_command.nas_gate_open / extend / close` commands.
+* `nas_gate.yaml` — REST sensors (`binary_sensor.nas_gate`, one
+  `binary_sensor.nas_gate_<protection>` per protection, remaining minutes
+  for each, `sensor.nas_gate_status`) and the
+  `rest_command.nas_gate_open / extend / close` commands. Each command takes
+  `protections`: `all` (default), `ssh`, `quickconnect`, or a comma list.
 * `scripts_and_automation.yaml` — three scripts for dashboard buttons, and
   the automation that makes the phone notification's **+1 hour** and
-  **Close now** buttons work (the gate sends them as Companion app actions
-  `NAS_GATE_EXTEND_60` and `NAS_GATE_CLOSE`).
+  **Close now** buttons work. When everything was opened together the gate
+  sends the generic actions `NAS_GATE_EXTEND_60` / `NAS_GATE_CLOSE`; for a
+  single protection it appends its id (`NAS_GATE_CLOSE_SSH`), so the button
+  touches only that window.
+
+API: `POST /api/open?minutes=30&protections=ssh`, `POST /api/extend?minutes=60&protections=ssh`,
+`POST /api/close?protections=ssh`. Leave `protections` out for every managed protection.
+`GET /api/status` lists each protection with `is_open`, `expires_at` and `remaining_seconds`.
 
 A dashboard card example follows the same pattern as the Home Assistant
 agent gate: status, four duration buttons, extend, close.

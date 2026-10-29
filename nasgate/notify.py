@@ -32,15 +32,19 @@ def _send_ha(s: Settings, title: str, message: str, event: str) -> bool:
     if service.startswith("notify."):
         service = service[len("notify."):]
     url = f"{s.ha_url.rstrip('/')}/api/services/notify/{service}"
-    data: dict = {"tag": "nas-gate", "group": "nas-gate", "event": event}
+    # `event` is "n_opened" (all protections) or "n_opened:ssh" (one protection).
+    kind, _, cid = event.partition(":")
+    data: dict = {"tag": f"nas-gate-{cid}" if cid else "nas-gate", "group": "nas-gate", "event": event}
     # Action buttons for the Home Assistant Companion app. An automation in HA
     # listening for `mobile_app_notification_action` turns them into API calls
-    # (see README, "Home Assistant integration").
-    if event in ("n_opened", "n_reminder", "n_warning"):
+    # (see README, "Home Assistant integration"). With one protection the
+    # actions carry its id (NAS_GATE_CLOSE_SSH) so only that window is touched.
+    if kind in ("n_opened", "n_reminder", "n_warning"):
         lang = s.language
+        suffix = f"_{cid.upper()}" if cid else ""
         data["actions"] = [
-            {"action": "NAS_GATE_EXTEND_60", "title": _label(lang, "extend")},
-            {"action": "NAS_GATE_CLOSE", "title": _label(lang, "close")},
+            {"action": f"NAS_GATE_EXTEND_60{suffix}", "title": _label(lang, "extend")},
+            {"action": f"NAS_GATE_CLOSE{suffix}", "title": _label(lang, "close")},
         ]
     payload = {"title": title, "message": message, "data": data}
     r = httpx.post(url, json=payload, timeout=10,

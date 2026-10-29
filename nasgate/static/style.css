@@ -72,3 +72,8 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); paddi
 .findings .fix { margin-top: 6px; }
 #scan-tools { margin: 4px 0 8px; }
 a.chip { text-decoration: none; display: inline-block; }
+
+.prot-head .pstate { margin-inline-start: auto; margin-inline-end: .6rem; font-size: .85rem; opacity: .7; }
+.prot-head .pstate.on { color: var(--danger); opacity: 1; font-weight: 600; }
+.pctl { flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+.chip.danger { border-color: var(--danger, #c62828); color: var(--danger, #c62828); }

@@ -1,7 +1,7 @@
 FROM python:3.12-alpine
 
 # iptables is used by the SSH access controller (needs NET_ADMIN + host network).
-RUN apk add --no-cache iptables tzdata
+RUN apk add --no-cache iptables iptables-legacy tzdata
 
 WORKDIR /app
 COPY requirements.txt .

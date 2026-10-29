@@ -37,10 +37,17 @@ class SSHError(Exception):
     pass
 
 
+def _find_iptables() -> str:
+    """Prefer the legacy (xtables) binary: Synology kernels have no nf_tables."""
+    for name in ("iptables-legacy", "iptables"):
+        exe = shutil.which(name)
+        if exe:
+            return exe
+    raise SSHError("iptables binary not found in the container image")
+
+
 def _ipt(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    exe = shutil.which("iptables")
-    if not exe:
-        raise SSHError("iptables binary not found in the container image")
+    exe = _find_iptables()
     cp = subprocess.run([exe, "-w", "5", *args], capture_output=True, text=True)
     if check and cp.returncode != 0:
         raise SSHError(f"iptables {' '.join(args)}: {cp.stderr.strip() or cp.stdout.strip()}")

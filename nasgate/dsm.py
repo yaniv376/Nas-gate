@@ -124,12 +124,58 @@ class DSMClient:
         return self._call(info["path"], {"api": api, "version": version, "method": method, **params})
 
     # -- QuickConnect ----------------------------------------------------
+    QC_API = "SYNO.Core.QuickConnect"
+
+    def _versions(self, api: str) -> list[int]:
+        info = self.api_info(api)
+        lo, hi = int(info.get("minVersion", 1)), int(info.get("maxVersion", 1))
+        return list(range(hi, lo - 1, -1))
+
+    def _try_versions(self, api: str, method: str, **params) -> dict:
+        """Call `method` with the newest version that knows it.
+
+        DSM reports error 103 (method does not exist) or 104 (version not
+        supported) when a method is missing from a given version, so we walk
+        down from maxVersion until one answers.
+        """
+        last: DSMError | None = None
+        for v in self._versions(api):
+            try:
+                return self.request(api, method, version=v, **params)
+            except DSMError as e:
+                last = e
+                if "DSM error 103" not in str(e) and "DSM error 104" not in str(e):
+                    raise
+        raise DSMError(f"{api}.{method}: {last}")
+
     def quickconnect_get(self) -> dict:
-        return self.request("SYNO.Core.QuickConnect", "get")
+        return self._try_versions(self.QC_API, "get")
 
     def quickconnect_set(self, enabled: bool) -> dict:
-        return self.request("SYNO.Core.QuickConnect", "set",
-                            enabled="true" if enabled else "false")
+        flag = "true" if enabled else "false"
+        errors = []
+        # Different DSM builds expose the switch under different method names.
+        for method, params in (
+            ("set", {"enabled": flag}),
+            ("set_server_config", {"enabled": flag}),
+            ("set_enable", {"enabled": flag}),
+        ):
+            try:
+                return self._try_versions(self.QC_API, method, **params)
+            except DSMError as e:
+                errors.append(str(e))
+        raise DSMError("no QuickConnect set method worked: " + " | ".join(errors))
+
+    def quickconnect_raw(self) -> dict:
+        """Every `get`-style reply per version, for the diagnostics page."""
+        out: dict[str, Any] = {}
+        for v in self._versions(self.QC_API):
+            for method in ("get", "get_misc_config", "get_server_config"):
+                try:
+                    out[f"{method} v{v}"] = self.request(self.QC_API, method, version=v)
+                except DSMError as e:
+                    out[f"{method} v{v}"] = str(e)
+        return out
 
     # -- probe (for the settings page "test connection" button) ----------
     def probe(self) -> dict:
@@ -146,4 +192,8 @@ class DSMClient:
                 out[api] = f"v{i.get('minVersion')}..{i.get('maxVersion')}"
             except DSMError:
                 out[api] = "missing"
+        try:
+            out["quickconnect"] = self.quickconnect_raw()
+        except DSMError as e:
+            out["quickconnect"] = str(e)
         return out

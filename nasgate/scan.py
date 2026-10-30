@@ -354,12 +354,21 @@ def run_scan(settings: config.Settings, gate_open: bool, proc_dir: str = "/proc/
     if lan_only and "otp" in by_id and by_id["otp"].severity == "high":
         by_id["otp"].severity = "low"
         by_id["otp"].advice_key = "a_otp_lan"
+    # A service bound to every interface is only reachable from the networks
+    # the DSM firewall allows. With the firewall on, these become low findings.
+    if by_id.get("firewall") is not None and by_id["firewall"].severity == "ok":
+        for f in findings:
+            if f.id.startswith("port_") and f.severity in ("medium", "high"):
+                f.severity = "low"
+                f.advice_key = "a_port_fw"
 
     penalty = 0
     for f in findings:
         w = SEVERITY_WEIGHT.get(f.severity, 0)
         if f.id.startswith("port_"):
             w = min(w, 4)            # a LAN-only service is a hint, not a hole
+            if f.advice_key == "a_port_fw":
+                w = 1                # behind the firewall: a reminder only
         penalty += w
     score = max(0, 100 - penalty)
     counts: dict[str, int] = {}

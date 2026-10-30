@@ -79,6 +79,7 @@ def test_weak_nas_flags_everything(scanmod, tmp_path):
     bad[("SYNO.Core.User", "list")] = {"users": [{"name": "admin", "expired": "normal"}, {"name": "guest", "expired": "normal"}]}
     bad[("SYNO.Core.OTP.EnforcePolicy", "get")] = {"otp_enforce_option": "none"}
     bad[("SYNO.Core.QuickConnect", "get")] = {"enabled": True}
+    bad[("SYNO.Core.Security.Firewall", "get")] = {"enable_firewall": False}
     del bad[("SYNO.Core.SecurityScan.Status", "system_get")]    # API missing on this model
     proc = write_proc(tmp_path, [23, 21, 9000], [445])
     r = scanmod.run_scan(Settings(dsm_user="u", dsm_password="p"), False, proc_dir=proc,
@@ -164,3 +165,15 @@ def test_otp_is_low_when_lan_only(scanmod, tmp_path):
     answers[("SYNO.Core.Security.Firewall", "get")] = {"enable_firewall": False}
     r = scanmod.run_scan(s, False, proc_dir=proc, client_factory=lambda: FakeDSM(answers))
     assert next(f for f in r.findings if f["id"] == "otp")["severity"] == "high"
+
+
+def test_firewall_on_demotes_exposed_ports(scanmod, tmp_path):
+    # NFS, NetBIOS and Portainer bound to every interface, but the DSM firewall
+    # is on: these are reminders (low), not holes, and barely cost points.
+    proc = write_proc(tmp_path, [22, 139, 2049, 9000])
+    r = scanmod.run_scan(Settings(dsm_user="u", dsm_password="p"), False, proc_dir=proc,
+                         client_factory=lambda: FakeDSM(GOOD))
+    by_id = {f["id"]: f for f in r.findings}
+    for pid in ("port_139", "port_2049", "port_9000"):
+        assert by_id[pid]["severity"] == "low" and by_id[pid]["advice_key"] == "a_port_fw"
+    assert r.score >= 90

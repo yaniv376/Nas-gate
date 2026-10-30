@@ -197,6 +197,65 @@ def check_security_advisor(dsm: DSMClient) -> list[Finding]:
     return [Finding("advisor", "ok", "f_advisor_clean", str(last or ""))]
 
 
+# Container images whose upstream announced the end of maintenance, with the
+# replacement the maintainers point to. Matched on the repository part only
+# (registry prefix and tag are ignored).
+DEPRECATED_IMAGES: dict[str, str] = {
+    "fallenbagel/jellyseerr": "ghcr.io/seerr-team/seerr",
+    "containrrr/watchtower": "nickfedor/watchtower",
+    "linuxserver/letsencrypt": "linuxserver/swag",
+}
+_REGISTRY_PREFIXES = ("docker.io/", "registry-1.docker.io/", "lscr.io/", "ghcr.io/", "index.docker.io/")
+
+
+def _image_repo(image: str) -> str:
+    """'lscr.io/linuxserver/foo:1.2' -> 'linuxserver/foo'; 'nginx' -> 'library/nginx'."""
+    img = str(image or "").strip()
+    if "@" in img:
+        img = img.split("@", 1)[0]
+    for p in _REGISTRY_PREFIXES:
+        if img.startswith(p):
+            img = img[len(p):]
+            break
+    last = img.rsplit("/", 1)[-1]
+    if ":" in last:
+        img = img[: len(img) - len(last)] + last.split(":", 1)[0]
+    if "/" not in img:
+        img = "library/" + img
+    return img.lower()
+
+
+def check_containers(dsm: DSMClient) -> list[Finding]:
+    """Containers whose image has been declared unmaintained upstream.
+
+    Uses Container Manager's own API, so the gate's DSM user needs the
+    Container Manager application permission; without it the check reports
+    'could not check' like any other.
+    """
+    data = dsm.request("SYNO.Docker.Container", "list", limit=-1, offset=0, type="all")
+    containers = data.get("containers") or data.get("data") or []
+    if isinstance(containers, dict):
+        containers = list(containers.values())
+    out: list[Finding] = []
+    names: list[str] = []
+    for c in containers:
+        if not isinstance(c, dict):
+            continue
+        image = c.get("image") or c.get("image_name") or ""
+        repo = _image_repo(image)
+        names.append(str(c.get("name") or repo))
+        repl = DEPRECATED_IMAGES.get(repo)
+        if not repl:
+            continue
+        running = str(c.get("status") or c.get("state") or "").lower() in ("running", "up")
+        sev = "medium" if running else "low"
+        out.append(Finding(f"image_{repo.replace('/', '_')}", sev, "f_image_deprecated",
+                           f"{c.get('name') or repo}: {image} → {repl}", "a_image_deprecated"))
+    out.append(Finding("containers", "info" if names else "ok", "f_containers",
+                       ", ".join(sorted(names)) if names else "0"))
+    return out
+
+
 DSM_CHECKS: list[tuple[str, Callable[..., list[Finding]]]] = [
     ("dsm_update", check_dsm_update),
     ("terminal", check_terminal),
@@ -207,6 +266,7 @@ DSM_CHECKS: list[tuple[str, Callable[..., list[Finding]]]] = [
     ("accounts", check_admin_account),
     ("otp", check_otp),
     ("advisor", check_security_advisor),
+    ("containers", check_containers),
 ]
 
 
@@ -284,6 +344,16 @@ def run_scan(settings: config.Settings, gate_open: bool, proc_dir: str = "/proc/
         findings.extend(check_listening(listening_ports(proc_dir)))
     except Exception as e:  # noqa: BLE001
         errors.append(f"listening: {e}")
+
+    # 2 step verification matters most when DSM is reachable from the internet.
+    # With the DSM firewall on and QuickConnect under the gate's control the
+    # login page is LAN-only, so the missing enforcement is a low finding.
+    by_id = {f.id: f for f in findings}
+    lan_only = (by_id.get("firewall") is not None and by_id["firewall"].severity == "ok"
+                and settings.manage_quickconnect and not gate_open)
+    if lan_only and "otp" in by_id and by_id["otp"].severity == "high":
+        by_id["otp"].severity = "low"
+        by_id["otp"].advice_key = "a_otp_lan"
 
     penalty = 0
     for f in findings:

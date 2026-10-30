@@ -33,6 +33,7 @@ GOOD = {
     ("SYNO.Core.OTP.EnforcePolicy", "get"): {"otp_enforce_option": "admin"},
     ("SYNO.Core.SecurityScan.Status", "system_get"): {"items": [{"title": "x", "status": "safe"}]},
     ("SYNO.Core.QuickConnect", "get"): {"enabled": False},
+    ("SYNO.Docker.Container", "list"): {"containers": [{"name": "seerr", "image": "ghcr.io/seerr-team/seerr:latest", "status": "running"}]},
 }
 
 
@@ -111,3 +112,55 @@ def test_fix_merges_current_settings(scanmod):
     assert out["ok"]
     with pytest.raises(KeyError):
         scanmod.apply_fix(Settings(), "format_disk", client_factory=lambda: dsm)
+
+
+def test_image_repo_normalisation(scanmod):
+    assert scanmod._image_repo("lscr.io/linuxserver/foo:1.2") == "linuxserver/foo"
+    assert scanmod._image_repo("fallenbagel/jellyseerr:latest") == "fallenbagel/jellyseerr"
+    assert scanmod._image_repo("nginx") == "library/nginx"
+    assert scanmod._image_repo("ghcr.io/seerr-team/seerr@sha256:abc") == "seerr-team/seerr"
+    assert scanmod._image_repo("myregistry:5000/team/app:v1") == "myregistry:5000/team/app"
+
+
+def test_deprecated_container_flagged(scanmod, tmp_path):
+    answers = dict(GOOD)
+    answers[("SYNO.Docker.Container", "list")] = {"containers": [
+        {"name": "fallenbagel-jellyseerr-1", "image": "fallenbagel/jellyseerr:latest", "status": "running"},
+        {"name": "seerr", "image": "ghcr.io/seerr-team/seerr:latest", "status": "running"},
+        {"name": "old-wt", "image": "containrrr/watchtower", "status": "exited"},
+    ]}
+    proc = write_proc(tmp_path, [22])
+    r = scanmod.run_scan(Settings(dsm_user="u", dsm_password="p"), False, proc_dir=proc,
+                         client_factory=lambda: FakeDSM(answers))
+    by_id = {f["id"]: f for f in r.findings}
+    assert by_id["image_fallenbagel_jellyseerr"]["severity"] == "medium"
+    assert "seerr-team/seerr" in by_id["image_fallenbagel_jellyseerr"]["detail"]
+    assert by_id["image_containrrr_watchtower"]["severity"] == "low"      # stopped container
+    assert "image_seerr-team_seerr" not in by_id
+    assert "seerr" in by_id["containers"]["detail"]
+
+
+def test_containers_unchecked_without_permission(scanmod, tmp_path):
+    answers = dict(GOOD); del answers[("SYNO.Docker.Container", "list")]
+    proc = write_proc(tmp_path, [22])
+    r = scanmod.run_scan(Settings(dsm_user="u", dsm_password="p"), False, proc_dir=proc,
+                         client_factory=lambda: FakeDSM(answers))
+    ids = {f["id"] for f in r.findings}
+    assert "containers_unchecked" in ids and not any(i.startswith("image_") for i in ids)
+
+
+def test_otp_is_low_when_lan_only(scanmod, tmp_path):
+    answers = dict(GOOD)
+    answers[("SYNO.Core.OTP.EnforcePolicy", "get")] = {"otp_enforce_option": "none"}
+    proc = write_proc(tmp_path, [22])
+    s = Settings(dsm_user="u", dsm_password="p", manage_quickconnect=True)
+    r = scanmod.run_scan(s, False, proc_dir=proc, client_factory=lambda: FakeDSM(answers))
+    otp = next(f for f in r.findings if f["id"] == "otp")
+    assert otp["severity"] == "low" and otp["advice_key"] == "a_otp_lan"
+    # gate open => QuickConnect reachable => back to high
+    r = scanmod.run_scan(s, True, proc_dir=proc, client_factory=lambda: FakeDSM(answers))
+    assert next(f for f in r.findings if f["id"] == "otp")["severity"] == "high"
+    # firewall off => high
+    answers[("SYNO.Core.Security.Firewall", "get")] = {"enable_firewall": False}
+    r = scanmod.run_scan(s, False, proc_dir=proc, client_factory=lambda: FakeDSM(answers))
+    assert next(f for f in r.findings if f["id"] == "otp")["severity"] == "high"

@@ -113,9 +113,17 @@ severity, a plain-language explanation and, where it cannot lock you out, a
 SMB2). Checks: DSM updates, Telnet/SSH, auto block, DSM firewall, HTTPS
 redirect and HSTS, SMB1, the default `admin` and `guest` accounts, 2 step
 verification enforcement, QuickConnect versus the gate state, DSM Security
-Advisor results, and every service listening on all network interfaces. The
-score and counts are also exposed in `/api/status` (`scan`) for Home
-Assistant.
+Advisor results, containers running an image whose maintainers declared it
+unmaintained (for example `fallenbagel/jellyseerr` → `seerr`), and every
+service listening on all network interfaces. The score and counts are also
+exposed in `/api/status` (`scan`) for Home Assistant.
+
+The container check uses Container Manager's API, so the gate's DSM user
+needs the **Container Manager** application permission (Control Panel → User
+→ the gate user → Applications); without it that one check reports "could not
+check". When the DSM firewall is on and QuickConnect is managed by the gate,
+the DSM login page is LAN-only and the missing 2 step verification
+enforcement is reported as *low* instead of *high*.
 
 ## Updating
 
